@@ -3,9 +3,8 @@ declare(strict_types=1);
 
 namespace JCIT\components;
 
-use creocoder\flysystem\Filesystem;
-use creocoder\flysystem\LocalFilesystem;
-use League\Flysystem\FileNotFoundException;
+use League\Flysystem\Filesystem;
+use League\Flysystem\Local\LocalFilesystemAdapter;
 use yii\base\InvalidConfigException;
 use yii\di\Instance;
 use yii\helpers\FileHelper;
@@ -14,13 +13,14 @@ use yii\web\AssetManager as YiiAssetManager;
 class AssetManager extends YiiAssetManager
 {
     public $basePath = '/';
-    public Filesystem|string|array $filesystem = [
-        'class' => LocalFilesystem::class,
-        'path' => '@webroot/assets',
-    ];
+    public Filesystem|string|array $filesystem;
 
     public function init(): void
     {
+        if (!isset($this->filesystem)) {
+            $this->filesystem = new Filesystem(new LocalFilesystemAdapter(\Yii::getAlias('@webroot/assets')));
+        }
+
         $this->filesystem = Instance::ensure(
             $this->filesystem,
             Filesystem::class
@@ -43,18 +43,17 @@ class AssetManager extends YiiAssetManager
         $dstFile = $dstDir . DIRECTORY_SEPARATOR . $fileName;
 
         if (!$this->filesystem->has($dstDir)) {
-            $this->filesystem->createDir($dstDir);
+            $this->filesystem->createDirectory($dstDir, []);
         }
 
-        try {
-            if ($this->filesystem->getTimestamp($dstFile) < @filemtime($src)) {
-                $this->filesystem->updateStream($dstFile, fopen($src, 'r'));
-            }
-        } catch (FileNotFoundException $e) {
+        if (
+            !$this->filesystem->fileExists($dstFile)
+            || $this->filesystem->lastModified($dstFile) < @filemtime($src)
+        ) {
             $this->filesystem->writeStream($dstFile, fopen($src, 'r'));
         }
 
-        if ($this->appendTimestamp && ($timestamp = $this->filesystem->getTimestamp($dstFile)) > 0) {
+        if ($this->appendTimestamp && ($timestamp = $this->filesystem->lastModified($dstFile)) > 0) {
             $fileName = $fileName . "?v=$timestamp";
         }
 
@@ -71,15 +70,15 @@ class AssetManager extends YiiAssetManager
 
         $currentLength = strlen($src);
 
-        if (!empty($options['forceCopy']) || ($this->forceCopy && !isset($options['forceCopy'])) || !$this->filesystem->has($dstDir)) {
-            if ($this->filesystem->has($dstDir)) {
-                $this->filesystem->deleteDir($dstDir);
+        if (!empty($options['forceCopy']) || ($this->forceCopy && !isset($options['forceCopy'])) || !$this->filesystem->directoryExists($dstDir)) {
+            if ($this->filesystem->directoryExists($dstDir)) {
+                $this->filesystem->deleteDirectory($dstDir);
             }
 
             $folders = FileHelper::findDirectories($src);
             foreach ($folders as $folder) {
                 $folder = substr($folder, $currentLength);
-                $this->filesystem->createDir($dstDir . $folder);
+                $this->filesystem->createDirectory($dstDir . $folder);
             }
 
             $files = FileHelper::findFiles($src);

@@ -24,15 +24,11 @@ to the `require` section of your `composer.json` file.
 ```php
 ...
 'components' => [
-    'assetFilesystem' => [
-        'class' => \creocoder\flysystem\LocalFilesystem::class,
-        'path' => '@webroot/assets',
-    ],
+    'assetFilesystem' => function() {
+        return new \League\Flysystem\Filesystem(new \League\Flysystem\Local\LocalFilesystemAdapter(\Yii::getAlias('@webroot/assets')));
+    },
     'assetManager' => [
-        'class' => AssetManager::class,
-        'converter' => [
-            'class' => AssetConverter::class,
-        ],
+        'class' => \JCIT\components\AssetManager::class,
         'filesystem' => 'assetFilesystem',
     ],
 ],
